@@ -1,0 +1,195 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// USER
+// =============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatarUrl     String?
+  
+  // Authentication
+  passwordHash  String?
+  provider      AuthProvider @default(LOCAL)
+  providerId    String?
+  
+  // API Keys storage (encrypted)
+  openaiKey     String?   @db.Text
+  anthropicKey  String?   @db.Text
+  
+  // Preferences
+  defaultModel  AIModel   @default(GPT_3_5_TURBO)
+  defaultLength SummaryLength @default(MEDIUM)
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  documents     Document[]
+  summaries     Summary[]
+  apiKeys       ApiKey[]
+  
+  @@map("users")
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  GITHUB
+}
+
+enum AIModel {
+  GPT_4
+  GPT_3_5_TURBO
+  CLAUDE_3_OPUS
+  CLAUDE_3_SONNET
+}
+
+enum SummaryLength {
+  SHORT
+  MEDIUM
+  LONG
+}
+
+// =============================================================================
+// API KEY (for external integrations / bookmarkslet)
+// =============================================================================
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique @db.VarChar(64)
+  name      String?
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  
+  createdAt DateTime  @default(now())
+  
+  @@index([key])
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// =============================================================================
+// DOCUMENT (Source content)
+// =============================================================================
+
+model Document {
+  id            String    @id @default(cuid())
+  
+  // Document metadata
+  title         String?
+  sourceType    SourceType
+  mimeType      String?   @db.VarChar(100)
+  
+  // Content storage
+  url           String?   @db.VarChar(2048)       // For URL sources
+  filePath      String?   @db.VarChar(512)        // For uploaded files
+  fileSize      Int?                                 // In bytes
+  textContent   String?   @db.Text                // Extracted text
+  rawContent    String?   @db.Text                // Original (HTML/PDF binary hash)
+  rawContentHash String?  @db.VarChar(64)        // SHA-256 hash for deduplication
+  
+  // Parsing metadata
+  parsedAt      DateTime?
+  parseError    String?   @db.Text
+  
+  // Page count (for PDFs)
+  pageCount     Int?
+  
+  // Language detection
+  detectedLang  String?   @db.VarChar(10)
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // User relation
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Relations
+  summaries     Summary[]
+  
+  @@index([userId])
+  @@index([sourceType])
+  @@index([url])
+  @@index([rawContentHash])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+enum SourceType {
+  URL
+  PDF
+  TEXT
+}
+
+// =============================================================================
+// SUMMARY
+// =============================================================================
+
+model Summary {
+  id            String    @id @default(cuid())
+  
+  // Content
+  originalText  String    @db.Text
+  summaryText   String    @db.Text
+  
+  // AI metadata
+  model         AIModel
+  promptTokens  Int?
+  completionTokens Int?
+  totalCost     Decimal?  @db.Decimal(10, 6)
+  
+  // Settings used
+  length        SummaryLength
+  temperature   Float    @default(0.3)
+  
+  // Response metadata
+  rawResponse   String?   @db.Text                // Full API response for debugging
+  
+  // Quality indicators
+  qualityScore  Float?                              // 0-1 confidence score
+  isApproved    Boolean   @default(false)
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // User relation
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // Document relation (optional - can summarize without document)
+  documentId    String?
+  document      Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  
+  // Self-reference for versions
+  parentId      String?
+  parent        Summary?  @relation("SummaryVersions", fields: [parentId], references: [id])
+  versions      Summary[] @relation("SummaryVersions")
+  
+  @@index([userId])
+  @@index([documentId])
+  @@index([model])
+  @@index([createdAt])
+  @@map("summaries")
+}
