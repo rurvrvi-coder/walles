@@ -181,17 +181,19 @@ export class SummarizerService {
   }
 
   private async generateHuggingFaceSummary(prompt: string, model: string, token: string): Promise<SummaryResult> {
-    const response = await fetch('https://router.huggingface.co/hf-inference/services/free/v1/chat/completions', {
+    const response = await fetch(`https://router.huggingface.co/${model}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 1024,
+        inputs: prompt,
+        parameters: {
+          temperature: 0.3,
+          max_new_tokens: 512,
+          return_full_text: false,
+        },
       }),
     });
 
@@ -201,7 +203,7 @@ export class SummarizerService {
     }
 
     const data = await response.json();
-    const summary = data.choices?.[0]?.message?.content || data.content || 'No response from model';
+    const summary = Array.isArray(data) ? data[0]?.generated_text : data.generated_text || 'No response from model';
     
     return {
       summary,
