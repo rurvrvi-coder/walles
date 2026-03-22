@@ -140,8 +140,8 @@ const MODEL_CONFIG: Record<AIModel, { provider: 'openai' | 'anthropic' | 'ollama
   'claude-3-sonnet': { provider: 'anthropic', model: 'claude-3-sonnet-20240229' },
   'free-llama': { provider: 'ollama', model: 'llama3.2' },
   'free-mistral': { provider: 'ollama', model: 'mistral' },
-  'hf-llama': { provider: 'huggingface', model: 'meta-llama/Llama-3.2-1B-Instruct' },
-  'hf-mistral': { provider: 'huggingface', model: 'mistralai/Mistral-7B-Instruct-v0.2' },
+  'hf-llama': { provider: 'huggingface', model: 'Qwen/Qwen2.5-0.5B-Instruct' },
+  'hf-mistral': { provider: 'huggingface', model: 'Qwen/Qwen2.5-1.5B-Instruct' },
 };
 
 export class SummarizerService {
@@ -181,7 +181,7 @@ export class SummarizerService {
   }
 
   private async generateHuggingFaceSummary(prompt: string, model: string, token: string): Promise<SummaryResult> {
-    const response = await fetch(`https://router.huggingface.co/${model}/v1/chat/completions`, {
+    const response = await fetch('https://router.huggingface.co/hf-inference/services/free/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

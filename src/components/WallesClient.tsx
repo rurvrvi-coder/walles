@@ -490,8 +490,8 @@ function SettingsModal({
     { value: 'claude-3-opus', label: 'Claude 3 Opus', provider: 'Anthropic' },
     { value: 'free-llama', label: 'Llama 3.2', provider: 'Ollama (Free)', free: true },
     { value: 'free-mistral', label: 'Mistral', provider: 'Ollama (Free)', free: true },
-    { value: 'hf-llama', label: 'Llama 3.2 (HF)', provider: 'HuggingFace (Free)', free: true },
-    { value: 'hf-mistral', label: 'Mistral (HF)', provider: 'HuggingFace (Free)', free: true },
+    { value: 'hf-llama', label: 'Qwen 0.5B (HF)', provider: 'HuggingFace (Free)', free: true },
+    { value: 'hf-mistral', label: 'Qwen 1.5B (HF)', provider: 'HuggingFace (Free)', free: true },
   ];
 
   const isFreeModel = model === 'free-llama' || model === 'free-mistral' || model === 'hf-llama' || model === 'hf-mistral';
