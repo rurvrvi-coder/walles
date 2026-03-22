@@ -181,7 +181,7 @@ export class SummarizerService {
   }
 
   private async generateHuggingFaceSummary(prompt: string, model: string, token: string): Promise<SummaryResult> {
-    const response = await fetch(`https://router.huggingface.co/${model}`, {
+    const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
