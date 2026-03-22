@@ -140,8 +140,8 @@ const MODEL_CONFIG: Record<AIModel, { provider: 'openai' | 'anthropic' | 'ollama
   'claude-3-sonnet': { provider: 'anthropic', model: 'claude-3-sonnet-20240229' },
   'free-llama': { provider: 'ollama', model: 'llama3.2' },
   'free-mistral': { provider: 'ollama', model: 'mistral' },
-  'hf-llama': { provider: 'huggingface', model: 'Qwen/Qwen2.5-0.5B-Instruct' },
-  'hf-mistral': { provider: 'huggingface', model: 'Qwen/Qwen2.5-1.5B-Instruct' },
+  'hf-llama': { provider: 'huggingface', model: 'google/gemma-2b-it' },
+  'hf-mistral': { provider: 'huggingface', model: 'microsoft/phi-2' },
 };
 
 export class SummarizerService {
@@ -181,7 +181,7 @@ export class SummarizerService {
   }
 
   private async generateHuggingFaceSummary(prompt: string, model: string, token: string): Promise<SummaryResult> {
-    const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+    const response = await fetch('https://router.huggingface.co/tgi', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -190,6 +190,7 @@ export class SummarizerService {
       body: JSON.stringify({
         inputs: prompt,
         parameters: {
+          model: model,
           temperature: 0.3,
           max_new_tokens: 512,
           return_full_text: false,
