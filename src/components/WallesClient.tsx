@@ -106,7 +106,8 @@ function WallesMain() {
   const { addItem } = useLocalStorageHistory();
   const { handleError, handleSuccess } = useApiError();
 
-  const isFreeModel = model === 'free-llama' || model === 'free-mistral';
+  const isFreeModel = model === 'free-llama' || model === 'free-mistral' || model === 'hf-llama' || model === 'hf-mistral';
+  const isHuggingFace = model === 'hf-llama' || model === 'hf-mistral';
 
   const handleSummarize = useCallback(async () => {
     if (!apiKey && !isFreeModel) {
@@ -489,9 +490,12 @@ function SettingsModal({
     { value: 'claude-3-opus', label: 'Claude 3 Opus', provider: 'Anthropic' },
     { value: 'free-llama', label: 'Llama 3.2', provider: 'Ollama (Free)', free: true },
     { value: 'free-mistral', label: 'Mistral', provider: 'Ollama (Free)', free: true },
+    { value: 'hf-llama', label: 'Llama 3.2 (HF)', provider: 'HuggingFace (Free)', free: true },
+    { value: 'hf-mistral', label: 'Mistral (HF)', provider: 'HuggingFace (Free)', free: true },
   ];
 
-  const isFreeModel = model === 'free-llama' || model === 'free-mistral';
+  const isFreeModel = model === 'free-llama' || model === 'free-mistral' || model === 'hf-llama' || model === 'hf-mistral';
+  const isHuggingFace = model === 'hf-llama' || model === 'hf-mistral';
 
   const lengths: { value: SummaryLength; label: string }[] = [
     { value: 'short', label: 'Короткий' },
@@ -549,7 +553,7 @@ function SettingsModal({
             </div>
           </div>
 
-          {isFreeModel && (
+          {isFreeModel && !isHuggingFace && (
             <div>
               <label className="block text-sm font-medium text-white/80 mb-3">Ollama URL</label>
               <input
@@ -560,6 +564,20 @@ function SettingsModal({
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-indigo-500/50 transition-all"
               />
               <p className="mt-2 text-xs text-white/40">Убедитесь, что Ollama запущен локально</p>
+            </div>
+          )}
+
+          {isHuggingFace && (
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-3">HuggingFace Token</label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => onApiKeyChange(e.target.value)}
+                placeholder="hf_..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-indigo-500/50 transition-all"
+              />
+              <p className="mt-2 text-xs text-white/40">Бесплатный токен с huggingface.co</p>
             </div>
           )}
 

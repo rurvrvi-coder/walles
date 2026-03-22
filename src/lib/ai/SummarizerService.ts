@@ -133,13 +133,15 @@ const LENGTH_INSTRUCTIONS: Record<SummaryLength, string> = {
   long: '2-3 paragraphs with comprehensive key points. Full detail.',
 };
 
-const MODEL_CONFIG: Record<AIModel, { provider: 'openai' | 'anthropic' | 'ollama'; model: string }> = {
+const MODEL_CONFIG: Record<AIModel, { provider: 'openai' | 'anthropic' | 'ollama' | 'huggingface'; model: string; hfModel?: string }> = {
   'gpt-4': { provider: 'openai', model: 'gpt-4' },
   'gpt-3.5-turbo': { provider: 'openai', model: 'gpt-3.5-turbo' },
   'claude-3-opus': { provider: 'anthropic', model: 'claude-3-opus-20240229' },
   'claude-3-sonnet': { provider: 'anthropic', model: 'claude-3-sonnet-20240229' },
   'free-llama': { provider: 'ollama', model: 'llama3.2' },
   'free-mistral': { provider: 'ollama', model: 'mistral' },
+  'hf-llama': { provider: 'huggingface', model: 'meta-llama/Llama-3.2-1B-Instruct' },
+  'hf-mistral': { provider: 'huggingface', model: 'mistralai/Mistral-7B-Instruct-v0.2' },
 };
 
 export class SummarizerService {
@@ -174,6 +176,38 @@ export class SummarizerService {
     return {
       summary: data.response,
       model: `ollama:${model}`,
+      finishReason: 'stop',
+    };
+  }
+
+  private async generateHuggingFaceSummary(prompt: string, model: string, token: string): Promise<SummaryResult> {
+    const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: {
+          temperature: 0.3,
+          max_new_tokens: 1024,
+          return_full_text: false,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HuggingFace error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const summary = Array.isArray(data) ? data[0]?.generated_text : data.generated_text;
+    
+    return {
+      summary: summary || 'No response from model',
+      model: `hf:${model}`,
       finishReason: 'stop',
     };
   }
@@ -288,6 +322,20 @@ Output your summary now:`;
       }
     }
 
+    if (config.provider === 'huggingface') {
+      if (!apiKey) {
+        throw new Error('HuggingFace token is required for free HF models');
+      }
+      try {
+        return await this.generateHuggingFaceSummary(prompt, config.model, apiKey);
+      } catch (error: any) {
+        if (callbacks?.onError) {
+          callbacks.onError(error);
+        }
+        throw error;
+      }
+    }
+
     if (!apiKey) {
       throw new Error('API key is required for cloud models');
     }
@@ -310,7 +358,7 @@ Output your summary now:`;
     prompt: string,
     apiKey: string,
     model: AIModel,
-    config: { provider: 'openai' | 'anthropic' | 'ollama'; model: string },
+    config: { provider: 'openai' | 'anthropic' | 'ollama' | 'huggingface'; model: string },
     temperature: number
   ): Promise<SummaryResult> {
     let llm: ChatOpenAI | ChatAnthropic;
@@ -345,7 +393,7 @@ Output your summary now:`;
     prompt: string,
     apiKey: string,
     _model: AIModel,
-    config: { provider: 'openai' | 'anthropic' | 'ollama'; model: string },
+    config: { provider: 'openai' | 'anthropic' | 'ollama' | 'huggingface'; model: string },
     callbacks: StreamingCallbacks
   ): Promise<SummaryResult> {
     return new Promise(async (resolve, reject) => {
@@ -512,6 +560,8 @@ Output your summary now:`;
       'claude-3-sonnet': { input: 0.000003, output: 0.000015 },
       'free-llama': { input: 0, output: 0 },
       'free-mistral': { input: 0, output: 0 },
+      'hf-llama': { input: 0, output: 0 },
+      'hf-mistral': { input: 0, output: 0 },
     };
 
     const { input: inputPrice, output: outputPrice } = pricing[model];
