@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       metadata = result.metadata;
     }
 
-    if (!extractedText || extractedText.length < 50) {
+    if (!extractedText || extractedText.length < 10) {
       return NextResponse.json(
         { error: 'Could not extract text from file. File might be empty or corrupted.' },
         { status: 422, headers: getCorsHeaders() }

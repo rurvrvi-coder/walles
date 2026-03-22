@@ -1,8 +1,8 @@
-const pdfParse = require('pdf-parse');
+import { PDFParse } from 'pdf-parse';
 
 const MAX_PAGES = 50;
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
-const MIN_TEXT_LENGTH = 50;
+const MIN_TEXT_LENGTH = 10;
 const MAX_TEXT_LENGTH = 100_000;
 
 interface PdfMetadata {
@@ -145,10 +145,13 @@ export async function parsePdf(
 
   let data: any;
   try {
-    data = await pdfParse(buffer, {
-      max: maxPages,
-      version: 'v1',
-    });
+    const uint8Array = new Uint8Array(buffer);
+    const parser = new PDFParse({ data: uint8Array });
+    const result = await parser.getText();
+    data = {
+      numpages: result.pages.length,
+      text: result.text,
+    };
   } catch (err: any) {
     throw new Error(`Failed to parse PDF: ${err.message}`);
   }

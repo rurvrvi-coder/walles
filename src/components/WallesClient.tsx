@@ -7,8 +7,9 @@ import { cleanText } from '@/lib/parsers/textCleaner';
 import { useApiError } from '@/hooks/useApiError';
 import SidebarWidget from './SidebarWidget';
 import History, { useLocalStorageHistory, HistoryItem } from './History';
+import FileDropzone from './FileDropzone';
 
-type InputMode = 'url' | 'text';
+type InputMode = 'url' | 'text' | 'file';
 
 interface SummaryResult {
   id: string;
@@ -101,12 +102,14 @@ function WallesMain() {
   const [parsedText, setParsedText] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
-  const { model, length, apiKey, setModel, setLength, setApiKey } = useSettingsStore();
+  const { model, length, apiKey, ollamaUrl, setModel, setLength, setApiKey } = useSettingsStore();
   const { addItem } = useLocalStorageHistory();
   const { handleError, handleSuccess } = useApiError();
 
+  const isFreeModel = model === 'free-llama' || model === 'free-mistral';
+
   const handleSummarize = useCallback(async () => {
-    if (!apiKey) {
+    if (!apiKey && !isFreeModel) {
       handleError('Введите API ключ в настройках');
       setShowSettings(true);
       return;
@@ -154,6 +157,7 @@ function WallesMain() {
           model,
           length,
           apiKey,
+          ollamaUrl,
         }),
       });
 
@@ -171,7 +175,7 @@ function WallesMain() {
         summary: data.summary || data.text,
         model,
         length,
-        sourceType: mode as 'url' | 'text',
+        sourceType: mode as 'url' | 'text' | 'file',
         sourceUrl: mode === 'url' ? inputValue : undefined,
       });
     } catch (err: any) {
@@ -279,6 +283,19 @@ function WallesMain() {
                 </svg>
                 Текст
               </button>
+              <button
+                onClick={() => setMode('file')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
+                  mode === 'file'
+                    ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/25'
+                    : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Файл
+              </button>
             </div>
 
             <div className="relative">
@@ -296,6 +313,13 @@ function WallesMain() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" />
                   </svg>
                 </div>
+              ) : mode === 'file' ? (
+                <FileDropzone
+                  onFileUploaded={(result) => {
+                    setParsedText(result.text);
+                  }}
+                  className="mt-4"
+                />
               ) : (
                 <textarea
                   value={inputValue}
@@ -320,7 +344,7 @@ function WallesMain() {
 
             <button
               onClick={handleSummarize}
-              disabled={isLoading || isParsing || !inputValue.trim()}
+              disabled={isLoading || isParsing || (!inputValue.trim() && !parsedText)}
               className="mt-6 w-full py-4 px-6 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all flex items-center justify-center gap-2"
             >
               {isLoading || isParsing ? (
@@ -425,9 +449,11 @@ function WallesMain() {
           model={model}
           length={length}
           apiKey={apiKey}
+          ollamaUrl={ollamaUrl}
           onModelChange={setModel}
           onLengthChange={setLength}
           onApiKeyChange={setApiKey}
+          onOllamaUrlChange={(url) => useSettingsStore.getState().setOllamaUrl(url)}
           onClose={() => setShowSettings(false)}
         />
       )}
@@ -439,25 +465,33 @@ function SettingsModal({
   model,
   length,
   apiKey,
+  ollamaUrl,
   onModelChange,
   onLengthChange,
   onApiKeyChange,
+  onOllamaUrlChange,
   onClose,
 }: {
   model: AIModel;
   length: SummaryLength;
   apiKey: string;
+  ollamaUrl: string;
   onModelChange: (m: AIModel) => void;
   onLengthChange: (l: SummaryLength) => void;
   onApiKeyChange: (k: string) => void;
+  onOllamaUrlChange: (u: string) => void;
   onClose: () => void;
 }) {
-  const models: { value: AIModel; label: string; provider: string }[] = [
+  const models: { value: AIModel; label: string; provider: string; free?: boolean }[] = [
     { value: 'gpt-4', label: 'GPT-4', provider: 'OpenAI' },
     { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', provider: 'OpenAI' },
     { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet', provider: 'Anthropic' },
     { value: 'claude-3-opus', label: 'Claude 3 Opus', provider: 'Anthropic' },
+    { value: 'free-llama', label: 'Llama 3.2', provider: 'Ollama (Free)', free: true },
+    { value: 'free-mistral', label: 'Mistral', provider: 'Ollama (Free)', free: true },
   ];
+
+  const isFreeModel = model === 'free-llama' || model === 'free-mistral';
 
   const lengths: { value: SummaryLength; label: string }[] = [
     { value: 'short', label: 'Короткий' },
@@ -514,6 +548,20 @@ function SettingsModal({
               ))}
             </div>
           </div>
+
+          {isFreeModel && (
+            <div>
+              <label className="block text-sm font-medium text-white/80 mb-3">Ollama URL</label>
+              <input
+                type="text"
+                value={ollamaUrl}
+                onChange={(e) => onOllamaUrlChange(e.target.value)}
+                placeholder="http://localhost:11434"
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 outline-none focus:border-indigo-500/50 transition-all"
+              />
+              <p className="mt-2 text-xs text-white/40">Убедитесь, что Ollama запущен локально</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-white/80 mb-3">Длина конспекта</label>

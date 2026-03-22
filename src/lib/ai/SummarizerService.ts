@@ -10,6 +10,7 @@ export interface SummaryOptions {
   length?: SummaryLength;
   temperature?: number;
   apiKey?: string;
+  ollamaUrl?: string;
 }
 
 export interface SummaryResult {
@@ -132,11 +133,13 @@ const LENGTH_INSTRUCTIONS: Record<SummaryLength, string> = {
   long: '2-3 paragraphs with comprehensive key points. Full detail.',
 };
 
-const MODEL_CONFIG: Record<AIModel, { provider: 'openai' | 'anthropic'; model: string }> = {
+const MODEL_CONFIG: Record<AIModel, { provider: 'openai' | 'anthropic' | 'ollama'; model: string }> = {
   'gpt-4': { provider: 'openai', model: 'gpt-4' },
   'gpt-3.5-turbo': { provider: 'openai', model: 'gpt-3.5-turbo' },
   'claude-3-opus': { provider: 'anthropic', model: 'claude-3-opus-20240229' },
   'claude-3-sonnet': { provider: 'anthropic', model: 'claude-3-sonnet-20240229' },
+  'free-llama': { provider: 'ollama', model: 'llama3.2' },
+  'free-mistral': { provider: 'ollama', model: 'mistral' },
 };
 
 export class SummarizerService {
@@ -146,6 +149,33 @@ export class SummarizerService {
 
   private getModelConfig(model: AIModel) {
     return MODEL_CONFIG[model] || MODEL_CONFIG['gpt-3.5-turbo'];
+  }
+
+  private async generateOllamaSummary(prompt: string, model: string, ollamaUrl: string): Promise<SummaryResult> {
+    const response = await fetch(`${ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: false,
+        options: {
+          temperature: 0.3,
+          num_predict: 1024,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return {
+      summary: data.response,
+      model: `ollama:${model}`,
+      finishReason: 'stop',
+    };
   }
 
   private initializeLLM(apiKey: string, model: AIModel, streaming: boolean = false): void {
@@ -237,11 +267,8 @@ Output your summary now:`;
       length = 'medium',
       temperature = 0.3,
       apiKey,
+      ollamaUrl = 'http://localhost:11434',
     } = options;
-
-    if (!apiKey) {
-      throw new Error('API key is required');
-    }
 
     if (!text || text.trim().length < 50) {
       throw new Error('Text must be at least 50 characters');
@@ -249,6 +276,21 @@ Output your summary now:`;
 
     const config = this.getModelConfig(model);
     const prompt = this.buildPrompt(text, length);
+
+    if (config.provider === 'ollama') {
+      try {
+        return await this.generateOllamaSummary(prompt, config.model, ollamaUrl);
+      } catch (error: any) {
+        if (callbacks?.onError) {
+          callbacks.onError(error);
+        }
+        throw error;
+      }
+    }
+
+    if (!apiKey) {
+      throw new Error('API key is required for cloud models');
+    }
 
     try {
       if (callbacks?.onChunk) {
@@ -268,7 +310,7 @@ Output your summary now:`;
     prompt: string,
     apiKey: string,
     model: AIModel,
-    config: { provider: 'openai' | 'anthropic'; model: string },
+    config: { provider: 'openai' | 'anthropic' | 'ollama'; model: string },
     temperature: number
   ): Promise<SummaryResult> {
     let llm: ChatOpenAI | ChatAnthropic;
@@ -303,7 +345,7 @@ Output your summary now:`;
     prompt: string,
     apiKey: string,
     _model: AIModel,
-    config: { provider: 'openai' | 'anthropic'; model: string },
+    config: { provider: 'openai' | 'anthropic' | 'ollama'; model: string },
     callbacks: StreamingCallbacks
   ): Promise<SummaryResult> {
     return new Promise(async (resolve, reject) => {
@@ -447,12 +489,14 @@ Output your summary now:`;
     });
   }
 
-  getSupportedModels(): Array<{ id: AIModel; name: string; provider: string }> {
+  getSupportedModels(): Array<{ id: AIModel; name: string; provider: string; free?: boolean }> {
     return [
       { id: 'gpt-4', name: 'GPT-4', provider: 'OpenAI' },
       { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', provider: 'OpenAI' },
       { id: 'claude-3-opus', name: 'Claude 3 Opus', provider: 'Anthropic' },
       { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', provider: 'Anthropic' },
+      { id: 'free-llama', name: 'Llama 3.2 (Free)', provider: 'Ollama', free: true },
+      { id: 'free-mistral', name: 'Mistral (Free)', provider: 'Ollama', free: true },
     ];
   }
 
@@ -466,6 +510,8 @@ Output your summary now:`;
       'gpt-3.5-turbo': { input: 0.0000005, output: 0.0000015 },
       'claude-3-opus': { input: 0.000015, output: 0.000075 },
       'claude-3-sonnet': { input: 0.000003, output: 0.000015 },
+      'free-llama': { input: 0, output: 0 },
+      'free-mistral': { input: 0, output: 0 },
     };
 
     const { input: inputPrice, output: outputPrice } = pricing[model];
